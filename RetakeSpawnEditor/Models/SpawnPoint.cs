@@ -16,8 +16,8 @@ public class SpawnPoint
     public float QAngleZ { get; set; }
 
     [JsonIgnore]
-    public string TeamLabel => Team == 2 ? "T" : "CT";
+    public string TeamLabel => Team switch { 2 => "T", 3 => "CT", _ => $"?{Team}" };
 
     [JsonIgnore]
-    public string SiteLabel => BombSite == 0 ? "A" : "B";
+    public string SiteLabel => BombSite switch { 0 => "A", 1 => "B", _ => $"?{BombSite}" };
 }

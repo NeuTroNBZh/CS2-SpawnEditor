@@ -90,7 +90,11 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
             if (nearest?.SpawnId != _adminSession.GetNearestSpawn(steamId)?.SpawnId)
             {
                 _adminSession.SetNearestSpawn(steamId, nearest);
-                _vizManager.UpdateHighlight(nearest);
+                // Highlight uniquement si un seul admin est en mode vis (evite conflit multi-admin)
+                if (_adminSession.GetAdminsWithVisualization().Count == 1)
+                    _vizManager.UpdateHighlight(nearest);
+                else
+                    _vizManager.UpdateHighlight(null);
             }
 
             var totalT = _countT;
@@ -233,6 +237,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private void CmdSave(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
+        if (string.IsNullOrEmpty(_currentMap)) { player!.PrintToChat("[SpawnEditor] Aucune carte chargee."); return; }
         _fileManager.SaveSpawns(_currentMap, _spawns);
         _adminSession.MarkSaved();
         player!.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns sauvegardes -> {_currentMap}.json");
@@ -241,6 +246,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private void CmdReload(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
+        if (string.IsNullOrEmpty(_currentMap)) { player!.PrintToChat("[SpawnEditor] Aucune carte chargee."); return; }
         _spawns = _fileManager.LoadSpawns(_currentMap);
         UpdateSpawnCounts();
         _adminSession.MarkSaved();
@@ -253,7 +259,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         if (player == null || !player.IsValid) return false;
         if (!AdminManager.PlayerHasPermissions(player, Config.AdminFlag))
         {
-            player.PrintToChat("[SpawnEditor] Acces refuse -- @css/admin requis.");
+            player.PrintToChat($"[SpawnEditor] Acces refuse -- {Config.AdminFlag} requis.");
             return false;
         }
         return true;

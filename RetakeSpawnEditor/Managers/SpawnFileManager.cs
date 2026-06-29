@@ -17,8 +17,16 @@ public class SpawnFileManager
     {
         var path = GetSpawnPath(mapName);
         if (!File.Exists(path)) return new List<SpawnPoint>();
-        var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<List<SpawnPoint>>(json) ?? new List<SpawnPoint>();
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<List<SpawnPoint>>(json) ?? new List<SpawnPoint>();
+        }
+        catch (Exception ex) when (ex is JsonException or IOException)
+        {
+            Console.WriteLine($"[RetakeSpawnEditor] Erreur lecture {path}: {ex.Message}");
+            return new List<SpawnPoint>();
+        }
     }
 
     public void SaveSpawns(string mapName, IReadOnlyList<SpawnPoint> spawns)
