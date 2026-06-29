@@ -28,6 +28,9 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private int _countT;
     private int _countCT;
 
+    // Admins qui ont le noclip actif (independant de la visu)
+    private readonly HashSet<ulong> _noclipAdmins = new();
+
     public void OnConfigParsed(SpawnEditorConfig config) => Config = config;
 
     public override void Load(bool hotReload)
@@ -39,17 +42,17 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnMapEnd>(OnMapEnd);
         RegisterListener<Listeners.OnTick>(OnTick);
-        RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
 
-        AddCommand("css_se",        "Toggle spawn visualization",              CmdToggleVis);
-        AddCommand("css_se_add",    "Add spawn at current position [T|CT] [A|B]", CmdAdd);
-        AddCommand("css_se_del",    "Delete nearest spawn",                    CmdDel);
-        AddCommand("css_se_set",    "Edit nearest spawn [T|CT] [A|B]",        CmdSet);
-        AddCommand("css_se_zone",   "Toggle IsInBombZone on nearest spawn",    CmdZone);
-        AddCommand("css_se_tp",     "Teleport to spawn by index",              CmdTeleport);
-        AddCommand("css_se_list",   "List all spawns",                         CmdList);
-        AddCommand("css_se_save",   "Save spawns to JSON",                     CmdSave);
-        AddCommand("css_se_reload", "Reload spawns from JSON",                 CmdReload);
+        AddCommand("css_se",         "Toggle spawn visualization",               CmdToggleVis);
+        AddCommand("css_se_noclip",  "Toggle noclip (editor mode)",              CmdNoclip);
+        AddCommand("css_se_add",     "Add spawn at current position [T|CT] [A|B]", CmdAdd);
+        AddCommand("css_se_del",     "Delete nearest spawn",                     CmdDel);
+        AddCommand("css_se_set",     "Edit nearest spawn [T|CT] [A|B]",         CmdSet);
+        AddCommand("css_se_zone",    "Toggle IsInBombZone on nearest spawn",     CmdZone);
+        AddCommand("css_se_tp",      "Teleport to spawn by index",               CmdTeleport);
+        AddCommand("css_se_list",    "List all spawns",                          CmdList);
+        AddCommand("css_se_save",    "Save spawns to JSON",                      CmdSave);
+        AddCommand("css_se_reload",  "Reload spawns from JSON",                  CmdReload);
 
         if (hotReload) LoadCurrentMapSpawns();
         Console.WriteLine("[RetakeSpawnEditor] Loaded.");
@@ -57,13 +60,17 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
 
     public override void Unload(bool hotReload)
     {
-        foreach (var steamId in _adminSession.GetAdminsWithVisualization())
+        // Retirer le noclip de tous les admins avant le decharge
+        foreach (var steamId in _noclipAdmins.ToList())
         {
             var p = FindPlayerBySteamId(steamId);
             if (p != null) SetNoclip(p, false);
         }
+        _noclipAdmins.Clear();
+
         if (_adminSession.GetAdminsWithVisualization().Any())
-            Server.ExecuteCommand("mp_unpause_match");
+            ExitEditorMode();
+
         _vizManager.ClearAll();
         _adminSession.Clear();
         SimpleAdminBridge.UnregisterMenus();
@@ -79,8 +86,9 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
 
     private void OnMapStart(string mapName)
     {
+        _noclipAdmins.Clear();
         if (_adminSession.GetAdminsWithVisualization().Any())
-            Server.ExecuteCommand("mp_unpause_match");
+            ExitEditorMode();
         _vizManager.ClearAll();
         _adminSession.Clear();
         _currentMap = mapName;
@@ -93,16 +101,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     {
         _vizManager.ClearAll();
         _adminSession.Clear();
-    }
-
-    private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
-    {
-        var player = @event.Userid;
-        if (player == null || !player.IsValid) return HookResult.Continue;
-        if (!_adminSession.IsVisualizationEnabled(player.SteamID)) return HookResult.Continue;
-        // Re-apply noclip after spawn (small delay so spawn completes first)
-        AddTimer(0.1f, () => SetNoclip(player, true));
-        return HookResult.Continue;
+        _noclipAdmins.Clear();
     }
 
     private void OnTick()
@@ -123,7 +122,8 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
                 _vizManager.UpdateHighlight(admins.Count == 1 ? nearest : null);
             }
 
-            var line1 = $"[SpawnEditor ON] {_spawns.Count} spawns | T:{_countT} CT:{_countCT} | Noclip ON";
+            var noclipStatus = _noclipAdmins.Contains(steamId) ? " | Noclip ON" : "";
+            var line1 = $"[SpawnEditor ON] {_spawns.Count} spawns | T:{_countT} CT:{_countCT}{noclipStatus}";
             string line2;
             if (nearest != null)
             {
@@ -149,6 +149,12 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     {
         if (!IsAdmin(player)) return;
         ToggleVisualizationForAdmin(player!);
+    }
+
+    private void CmdNoclip(CCSPlayerController? player, CommandInfo info)
+    {
+        if (!IsAdmin(player)) return;
+        ToggleNoclipForAdmin(player!);
     }
 
     private void CmdAdd(CCSPlayerController? player, CommandInfo info)
@@ -234,23 +240,37 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         if (_adminSession.IsVisualizationEnabled(steamId))
         {
             _adminSession.DisableVisualization(steamId);
-            SetNoclip(player, false);
             if (!_adminSession.GetAdminsWithVisualization().Any())
             {
                 _vizManager.ClearAll();
-                Server.ExecuteCommand("mp_unpause_match");
-                Console.WriteLine("[RetakeSpawnEditor] Spawn Editor OFF -- retake reprise.");
+                ExitEditorMode();
             }
-            player.PrintToChat("[SpawnEditor] Visualisation desactivee -- noclip OFF -- retake reprise.");
+            player.PrintToChat("[SpawnEditor] Visualisation desactivee -- retake repris.");
         }
         else
         {
+            var wasFirstAdmin = !_adminSession.GetAdminsWithVisualization().Any();
             _adminSession.EnableVisualization(steamId);
             _vizManager.RebuildMarkers(_spawns);
+            if (wasFirstAdmin) EnterEditorMode();
+            player.PrintToChat($"[SpawnEditor] Visualisation activee ({_spawns.Count} spawns) -- utilisez css_se_noclip pour voler.");
+        }
+    }
+
+    internal void ToggleNoclipForAdmin(CCSPlayerController player)
+    {
+        var steamId = player.SteamID;
+        if (_noclipAdmins.Contains(steamId))
+        {
+            _noclipAdmins.Remove(steamId);
+            SetNoclip(player, false);
+            player.PrintToChat("[SpawnEditor] Noclip OFF.");
+        }
+        else
+        {
+            _noclipAdmins.Add(steamId);
             SetNoclip(player, true);
-            Server.ExecuteCommand("mp_pause_match");
-            Console.WriteLine($"[RetakeSpawnEditor] {player.PlayerName} active le Spawn Editor -- noclip ON -- retake pausee.");
-            player.PrintToChat($"[SpawnEditor] Visualisation activee ({_spawns.Count} spawns) -- noclip ON -- retake pausee.");
+            player.PrintToChat("[SpawnEditor] Noclip ON -- css_se_noclip pour desactiver.");
         }
     }
 
@@ -316,6 +336,22 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         UpdateSpawnCounts();
         if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
         player.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns recharges depuis {_currentMap}.json");
+    }
+
+    // -- Mode editeur (warmup infini) --
+
+    private static void EnterEditorMode()
+    {
+        // Warmup infini : aucune fin de manche, pas de bombe, mouvement libre
+        Server.ExecuteCommand("mp_warmup_start");
+        Server.ExecuteCommand("mp_warmup_pausetimer 1");
+        Console.WriteLine("[RetakeSpawnEditor] Editor mode ON -- warmup infini.");
+    }
+
+    private static void ExitEditorMode()
+    {
+        Server.ExecuteCommand("mp_warmup_end");
+        Console.WriteLine("[RetakeSpawnEditor] Editor mode OFF -- retake repris.");
     }
 
     // -- Helpers --

@@ -5,7 +5,6 @@ namespace RetakeSpawnEditor;
 
 // Runtime integration with CS2-SimpleAdmin (https://github.com/daffyyyy/CS2-SimpleAdmin).
 // Uses reflection so no compile-time dependency on CS2-SimpleAdminApi.dll is needed.
-// If SimpleAdmin is not installed, all methods are no-ops and the plugin runs standalone.
 public static class SimpleAdminBridge
 {
     private static dynamic? _api;
@@ -23,11 +22,9 @@ public static class SimpleAdminBridge
             {
                 var ifaceType = asm.GetType("CS2_SimpleAdminApi.ICS2_SimpleAdminApi");
                 if (ifaceType == null) continue;
-
                 var capField = ifaceType.GetField("PluginCapability", BindingFlags.Public | BindingFlags.Static);
                 var cap = capField?.GetValue(null);
                 if (cap == null) continue;
-
                 var api = cap.GetType().GetMethod("Get")?.Invoke(cap, null);
                 if (api != null) { _api = api; break; }
             }
@@ -54,6 +51,14 @@ public static class SimpleAdminBridge
                     return (object)_api.CreateMenuWithBack("Spawn Editor", "spawneditor", admin);
                 }),
                 flag, "css_se");
+
+            _api.RegisterMenu("spawneditor", "se_noclip", "Toggle Noclip",
+                (Func<CCSPlayerController, object>)(admin =>
+                {
+                    _plugin!.ToggleNoclipForAdmin(admin);
+                    return (object)_api.CreateMenuWithBack("Spawn Editor", "spawneditor", admin);
+                }),
+                flag, "css_se_noclip");
 
             _api.RegisterMenu("spawneditor", "se_add", "Add Spawn...",
                 (Func<CCSPlayerController, object>)(admin =>
@@ -114,7 +119,7 @@ public static class SimpleAdminBridge
     public static void UnregisterMenus()
     {
         if (_api == null) return;
-        foreach (var id in new[] { "se_toggle", "se_add", "se_del", "se_zone", "se_save", "se_reload" })
+        foreach (var id in new[] { "se_toggle", "se_noclip", "se_add", "se_del", "se_zone", "se_save", "se_reload" })
         {
             try { _api.UnregisterMenu("spawneditor", id); } catch { }
         }
