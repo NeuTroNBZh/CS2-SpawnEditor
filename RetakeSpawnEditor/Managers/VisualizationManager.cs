@@ -64,9 +64,10 @@ public class VisualizationManager
         var bottom = new Vector(spawn.PositionX, spawn.PositionY, spawn.PositionZ);
         var top = new Vector(spawn.PositionX, spawn.PositionY, spawn.PositionZ + _config.BeamHeight);
         beam.Teleport(bottom, new QAngle(0, 0, 0), new Vector(0, 0, 0));
-        beam.EndPos.X = top.X;
-        beam.EndPos.Y = top.Y;
-        beam.EndPos.Z = top.Z;
+        var endPos = beam.EndPos;
+        endPos.X = top.X;
+        endPos.Y = top.Y;
+        endPos.Z = top.Z;
         beam.DispatchSpawn();
         _pillars.Add(beam);
     }
@@ -108,6 +109,7 @@ public class VisualizationManager
             beam.Width = 2.0f;
             beam.EndWidth = 2.0f;
             beam.Amplitude = 0f;
+            beam.Speed = 0f;
 
             var p1 = new Vector(
                 spawn.PositionX + radius * (float)Math.Cos(a1),
@@ -119,9 +121,10 @@ public class VisualizationManager
                 spawn.PositionZ + 5f);
 
             beam.Teleport(p1, new QAngle(0, 0, 0), new Vector(0, 0, 0));
-            beam.EndPos.X = p2.X;
-            beam.EndPos.Y = p2.Y;
-            beam.EndPos.Z = p2.Z;
+            var endPos = beam.EndPos;
+            endPos.X = p2.X;
+            endPos.Y = p2.Y;
+            endPos.Z = p2.Z;
             beam.DispatchSpawn();
             _highlights.Add(beam);
         }
