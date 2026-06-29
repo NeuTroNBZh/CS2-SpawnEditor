@@ -81,6 +81,14 @@ public static class SimpleAdminBridge
                 }),
                 flag, "css_se_del");
 
+            _api.RegisterMenu("spawneditor", "se_zone", "Toggle Bomb Zone",
+                (Func<CCSPlayerController, object>)(admin =>
+                {
+                    _plugin!.ToggleBombZoneForAdmin(admin);
+                    return (object)_api.CreateMenuWithBack("Spawn Editor", "spawneditor", admin);
+                }),
+                flag, "css_se_zone");
+
             _api.RegisterMenu("spawneditor", "se_save", "Save Spawns",
                 (Func<CCSPlayerController, object>)(admin =>
                 {
@@ -106,10 +114,9 @@ public static class SimpleAdminBridge
     public static void UnregisterMenus()
     {
         if (_api == null) return;
-        foreach (var id in new[] { "se_toggle", "se_add", "se_del", "se_save", "se_reload" })
+        foreach (var id in new[] { "se_toggle", "se_add", "se_del", "se_zone", "se_save", "se_reload" })
         {
             try { _api.UnregisterMenu("spawneditor", id); } catch { }
         }
     }
 }
-

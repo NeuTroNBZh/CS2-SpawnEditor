@@ -39,16 +39,17 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         RegisterListener<Listeners.OnMapStart>(OnMapStart);
         RegisterListener<Listeners.OnMapEnd>(OnMapEnd);
         RegisterListener<Listeners.OnTick>(OnTick);
+        RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
 
-        AddCommand("css_se", "Toggle spawn visualization", CmdToggleVis);
-        AddCommand("css_se_add", "Add spawn at current position [T|CT] [A|B]", CmdAdd);
-        AddCommand("css_se_del", "Delete nearest spawn", CmdDel);
-        AddCommand("css_se_set", "Edit nearest spawn [T|CT] [A|B]", CmdSet);
-        AddCommand("css_se_zone", "Toggle IsInBombZone on nearest spawn", CmdZone);
-        AddCommand("css_se_tp", "Teleport to spawn by index", CmdTeleport);
-        AddCommand("css_se_list", "List all spawns", CmdList);
-        AddCommand("css_se_save", "Save spawns to JSON", CmdSave);
-        AddCommand("css_se_reload", "Reload spawns from JSON", CmdReload);
+        AddCommand("css_se",        "Toggle spawn visualization",              CmdToggleVis);
+        AddCommand("css_se_add",    "Add spawn at current position [T|CT] [A|B]", CmdAdd);
+        AddCommand("css_se_del",    "Delete nearest spawn",                    CmdDel);
+        AddCommand("css_se_set",    "Edit nearest spawn [T|CT] [A|B]",        CmdSet);
+        AddCommand("css_se_zone",   "Toggle IsInBombZone on nearest spawn",    CmdZone);
+        AddCommand("css_se_tp",     "Teleport to spawn by index",              CmdTeleport);
+        AddCommand("css_se_list",   "List all spawns",                         CmdList);
+        AddCommand("css_se_save",   "Save spawns to JSON",                     CmdSave);
+        AddCommand("css_se_reload", "Reload spawns from JSON",                 CmdReload);
 
         if (hotReload) LoadCurrentMapSpawns();
         Console.WriteLine("[RetakeSpawnEditor] Loaded.");
@@ -56,6 +57,11 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
 
     public override void Unload(bool hotReload)
     {
+        foreach (var steamId in _adminSession.GetAdminsWithVisualization())
+        {
+            var p = FindPlayerBySteamId(steamId);
+            if (p != null) SetNoclip(p, false);
+        }
         if (_adminSession.GetAdminsWithVisualization().Any())
             Server.ExecuteCommand("mp_unpause_match");
         _vizManager.ClearAll();
@@ -68,6 +74,8 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         SimpleAdminBridge.TryInit(this);
         SimpleAdminBridge.RegisterMenus();
     }
+
+    // -- Listeners --
 
     private void OnMapStart(string mapName)
     {
@@ -87,6 +95,16 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         _adminSession.Clear();
     }
 
+    private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        if (player == null || !player.IsValid) return HookResult.Continue;
+        if (!_adminSession.IsVisualizationEnabled(player.SteamID)) return HookResult.Continue;
+        // Re-apply noclip after spawn (small delay so spawn completes first)
+        AddTimer(0.1f, () => SetNoclip(player, true));
+        return HookResult.Continue;
+    }
+
     private void OnTick()
     {
         var admins = _adminSession.GetAdminsWithVisualization();
@@ -102,13 +120,10 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
             if (nearest?.SpawnId != _adminSession.GetNearestSpawn(steamId)?.SpawnId)
             {
                 _adminSession.SetNearestSpawn(steamId, nearest);
-                if (admins.Count == 1)
-                    _vizManager.UpdateHighlight(nearest);
-                else
-                    _vizManager.UpdateHighlight(null);
+                _vizManager.UpdateHighlight(admins.Count == 1 ? nearest : null);
             }
 
-            var line1 = $"[SpawnEditor ON] {_spawns.Count} spawns | T:{_countT} CT:{_countCT}";
+            var line1 = $"[SpawnEditor ON] {_spawns.Count} spawns | T:{_countT} CT:{_countCT} | Noclip ON";
             string line2;
             if (nearest != null)
             {
@@ -127,6 +142,8 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
             player.PrintToCenter($"{line1}\n{line2}");
         }
     }
+
+    // -- Commandes --
 
     private void CmdToggleVis(CCSPlayerController? player, CommandInfo info)
     {
@@ -166,11 +183,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private void CmdZone(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
-        var nearest = _adminSession.GetNearestSpawn(player!.SteamID);
-        if (nearest == null) { player.PrintToChat("[SpawnEditor] Aucun spawn proche."); return; }
-        nearest.IsInBombZone = !nearest.IsInBombZone;
-        _adminSession.MarkUnsaved();
-        player.PrintToChat($"[SpawnEditor] IsInBombZone -> {nearest.IsInBombZone}. Sauvegarde: css_se_save");
+        ToggleBombZoneForAdmin(player!);
     }
 
     private void CmdTeleport(CCSPlayerController? player, CommandInfo info)
@@ -221,22 +234,33 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         if (_adminSession.IsVisualizationEnabled(steamId))
         {
             _adminSession.DisableVisualization(steamId);
+            SetNoclip(player, false);
             if (!_adminSession.GetAdminsWithVisualization().Any())
             {
                 _vizManager.ClearAll();
                 Server.ExecuteCommand("mp_unpause_match");
                 Console.WriteLine("[RetakeSpawnEditor] Spawn Editor OFF -- retake reprise.");
             }
-            player.PrintToChat("[SpawnEditor] Visualisation desactivee -- retake reprise.");
+            player.PrintToChat("[SpawnEditor] Visualisation desactivee -- noclip OFF -- retake reprise.");
         }
         else
         {
             _adminSession.EnableVisualization(steamId);
             _vizManager.RebuildMarkers(_spawns);
+            SetNoclip(player, true);
             Server.ExecuteCommand("mp_pause_match");
-            Console.WriteLine($"[RetakeSpawnEditor] {player.PlayerName} active le Spawn Editor -- retake pausee.");
-            player.PrintToChat($"[SpawnEditor] Visualisation activee ({_spawns.Count} spawns) -- retake pausee.");
+            Console.WriteLine($"[RetakeSpawnEditor] {player.PlayerName} active le Spawn Editor -- noclip ON -- retake pausee.");
+            player.PrintToChat($"[SpawnEditor] Visualisation activee ({_spawns.Count} spawns) -- noclip ON -- retake pausee.");
         }
+    }
+
+    internal void ToggleBombZoneForAdmin(CCSPlayerController player)
+    {
+        var nearest = _adminSession.GetNearestSpawn(player.SteamID);
+        if (nearest == null) { player.PrintToChat("[SpawnEditor] Aucun spawn proche."); return; }
+        nearest.IsInBombZone = !nearest.IsInBombZone;
+        _adminSession.MarkUnsaved();
+        player.PrintToChat($"[SpawnEditor] IsInBombZone -> {nearest.IsInBombZone}. Sauvegarde: css_se_save");
     }
 
     internal void AddSpawnForAdmin(CCSPlayerController player, string teamArg, string siteArg)
@@ -296,6 +320,14 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
 
     // -- Helpers --
 
+    private static void SetNoclip(CCSPlayerController player, bool enabled)
+    {
+        var pawn = player.PlayerPawn?.Value;
+        if (pawn == null) return;
+        pawn.MoveType = enabled ? MoveType_t.MOVETYPE_NOCLIP : MoveType_t.MOVETYPE_WALK;
+        Utilities.SetStateChanged(pawn, "CBaseEntity", "m_MoveType");
+    }
+
     private bool IsAdmin(CCSPlayerController? player)
     {
         if (player == null || !player.IsValid) return false;
@@ -323,4 +355,3 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private static CCSPlayerController? FindPlayerBySteamId(ulong steamId) =>
         Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && p.SteamID == steamId);
 }
-
