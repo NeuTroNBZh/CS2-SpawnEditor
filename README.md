@@ -4,7 +4,7 @@
 
 **A spawn editor plugin for CS2Retake — built for CounterStrikeSharp**
 
-[![Release](https://img.shields.io/github/v/release/NeuTroNBZh/CS2-RETAKE?style=flat-square&label=Release&color=brightgreen)](https://github.com/NeuTroNBZh/CS2-RETAKE/releases/latest)
+[![Release](https://img.shields.io/github/v/release/NeuTroNBZh/CS2-SpawnEditor?style=flat-square&label=Release&color=brightgreen)](https://github.com/NeuTroNBZh/CS2-SpawnEditor/releases/latest)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=flat-square)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0-purple?style=flat-square)](https://dotnet.microsoft.com/)
 [![CounterStrikeSharp](https://img.shields.io/badge/CounterStrikeSharp-1.0.228-orange?style=flat-square)](https://github.com/roflmuffin/CounterStrikeSharp)
@@ -65,7 +65,7 @@
 Make sure **CS2 Retake V3**, **Metamod:Source** and **CounterStrikeSharp** are already installed.
 
 ### Step 2 — Download the plugin
-Go to the [**Releases**](https://github.com/NeuTroNBZh/CS2-RETAKE/releases/latest) page and download the latest `SPAWN-EDITOR-*.zip`.
+Go to the [**Releases**](https://github.com/NeuTroNBZh/CS2-SpawnEditor/releases/latest) page and download the latest `SPAWN-EDITOR-*.zip`.
 
 Two variants are available:
 
@@ -202,8 +202,8 @@ Spawns are stored in the same JSON format as CS2Retake:
 ## Building from Source
 
 ```bash
-git clone https://github.com/NeuTroNBZh/CS2-RETAKE.git
-cd CS2-RETAKE/spwanretake
+git clone https://github.com/NeuTroNBZh/CS2-SpawnEditor.git
+cd CS2-SpawnEditor
 
 dotnet build RetakeSpawnEditor/RetakeSpawnEditor.csproj -c Release
 ```
@@ -225,3 +225,6 @@ On Windows, the post-build script `BuildScripts/Sync-PluginArtifacts.ps1` automa
 ## License
 
 This project is licensed under the **GNU General Public License v3.0** — see the [LICENSE](LICENSE) file for details.
+
+
+
