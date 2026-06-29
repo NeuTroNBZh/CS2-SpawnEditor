@@ -56,12 +56,23 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
 
     public override void Unload(bool hotReload)
     {
+        if (_adminSession.GetAdminsWithVisualization().Any())
+            Server.ExecuteCommand("mp_unpause_match");
         _vizManager.ClearAll();
         _adminSession.Clear();
+        SimpleAdminBridge.UnregisterMenus();
+    }
+
+    public override void OnAllPluginsLoaded(bool hotReload)
+    {
+        SimpleAdminBridge.TryInit(this);
+        SimpleAdminBridge.RegisterMenus();
     }
 
     private void OnMapStart(string mapName)
     {
+        if (_adminSession.GetAdminsWithVisualization().Any())
+            Server.ExecuteCommand("mp_unpause_match");
         _vizManager.ClearAll();
         _adminSession.Clear();
         _currentMap = mapName;
@@ -78,7 +89,8 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
 
     private void OnTick()
     {
-        foreach (var steamId in _adminSession.GetAdminsWithVisualization())
+        var admins = _adminSession.GetAdminsWithVisualization();
+        foreach (var steamId in admins)
         {
             var player = FindPlayerBySteamId(steamId);
             if (player?.PlayerPawn?.Value?.AbsOrigin == null) continue;
@@ -90,17 +102,13 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
             if (nearest?.SpawnId != _adminSession.GetNearestSpawn(steamId)?.SpawnId)
             {
                 _adminSession.SetNearestSpawn(steamId, nearest);
-                // Highlight uniquement si un seul admin est en mode vis (evite conflit multi-admin)
-                if (_adminSession.GetAdminsWithVisualization().Count == 1)
+                if (admins.Count == 1)
                     _vizManager.UpdateHighlight(nearest);
                 else
                     _vizManager.UpdateHighlight(null);
             }
 
-            var totalT = _countT;
-            var totalCT = _countCT;
-            var line1 = $"[SpawnEditor ON] {_spawns.Count} spawns | T:{totalT} CT:{totalCT}";
-
+            var line1 = $"[SpawnEditor ON] {_spawns.Count} spawns | T:{_countT} CT:{_countCT}";
             string line2;
             if (nearest != null)
             {
@@ -123,60 +131,19 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private void CmdToggleVis(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
-        var steamId = player!.SteamID;
-
-        if (_adminSession.IsVisualizationEnabled(steamId))
-        {
-            _adminSession.DisableVisualization(steamId);
-            if (!_adminSession.GetAdminsWithVisualization().Any()) _vizManager.ClearAll();
-            player.PrintToChat("[SpawnEditor] Visualisation desactivee.");
-        }
-        else
-        {
-            _adminSession.EnableVisualization(steamId);
-            _vizManager.RebuildMarkers(_spawns);
-            player.PrintToChat($"[SpawnEditor] Visualisation activee -- {_spawns.Count} spawns.");
-        }
+        ToggleVisualizationForAdmin(player!);
     }
 
     private void CmdAdd(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
-        if (player!.PlayerPawn?.Value?.AbsOrigin == null) return;
-
-        var team = info.GetArg(1).ToUpper() == "CT" ? 3 : 2;
-        var site = info.GetArg(2).ToUpper() == "B" ? 1 : 0;
-        var pos = player.PlayerPawn.Value.AbsOrigin;
-        var rot = player.PlayerPawn.Value.AbsRotation;
-
-        var spawn = new SpawnPoint
-        {
-            SpawnId = Guid.NewGuid(),
-            Team = team, BombSite = site,
-            IsInBombZone = false,
-            PositionX = pos.X, PositionY = pos.Y, PositionZ = pos.Z,
-            QAngleX = rot?.X ?? 0f, QAngleY = rot?.Y ?? 0f, QAngleZ = rot?.Z ?? 0f
-        };
-
-        _spawns.Add(spawn);
-        UpdateSpawnCounts();
-        _adminSession.MarkUnsaved();
-        if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
-        player.PrintToChat($"[SpawnEditor] Spawn #{_spawns.Count - 1:D2} ajoute [{spawn.TeamLabel}][{spawn.SiteLabel}]. Sauvegarde: css_se_save");
+        AddSpawnForAdmin(player!, info.GetArg(1).ToUpper(), info.GetArg(2).ToUpper());
     }
 
     private void CmdDel(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
-        var nearest = _adminSession.GetNearestSpawn(player!.SteamID);
-        if (nearest == null) { player.PrintToChat("[SpawnEditor] Aucun spawn proche."); return; }
-
-        _spawns.Remove(nearest);
-        UpdateSpawnCounts();
-        _adminSession.SetNearestSpawn(player.SteamID, null);
-        _adminSession.MarkUnsaved();
-        if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
-        player.PrintToChat($"[SpawnEditor] Spawn supprime. Total: {_spawns.Count}. Sauvegarde: css_se_save");
+        DeleteNearestForAdmin(player!);
     }
 
     private void CmdSet(CCSPlayerController? player, CommandInfo info)
@@ -189,9 +156,9 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         var siteArg = info.GetArg(2).ToUpper();
         if (teamArg is "T" or "CT") nearest.Team = teamArg == "CT" ? 3 : 2;
         if (siteArg is "A" or "B") nearest.BombSite = siteArg == "B" ? 1 : 0;
-        UpdateSpawnCounts();
 
         _adminSession.MarkUnsaved();
+        UpdateSpawnCounts();
         if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
         player.PrintToChat($"[SpawnEditor] Spawn modifie -> [{nearest.TeamLabel}][{nearest.SiteLabel}]. Sauvegarde: css_se_save");
     }
@@ -237,22 +204,97 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private void CmdSave(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
-        if (string.IsNullOrEmpty(_currentMap)) { player!.PrintToChat("[SpawnEditor] Aucune carte chargee."); return; }
-        _fileManager.SaveSpawns(_currentMap, _spawns);
-        _adminSession.MarkSaved();
-        player!.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns sauvegardes -> {_currentMap}.json");
+        SaveSpawnsForAdmin(player!);
     }
 
     private void CmdReload(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
-        if (string.IsNullOrEmpty(_currentMap)) { player!.PrintToChat("[SpawnEditor] Aucune carte chargee."); return; }
-        _spawns = _fileManager.LoadSpawns(_currentMap);
+        ReloadSpawnsForAdmin(player!);
+    }
+
+    // -- Methodes internes (appelables depuis SimpleAdminBridge) --
+
+    internal void ToggleVisualizationForAdmin(CCSPlayerController player)
+    {
+        var steamId = player.SteamID;
+        if (_adminSession.IsVisualizationEnabled(steamId))
+        {
+            _adminSession.DisableVisualization(steamId);
+            if (!_adminSession.GetAdminsWithVisualization().Any())
+            {
+                _vizManager.ClearAll();
+                Server.ExecuteCommand("mp_unpause_match");
+                Console.WriteLine("[RetakeSpawnEditor] Spawn Editor OFF -- retake reprise.");
+            }
+            player.PrintToChat("[SpawnEditor] Visualisation desactivee -- retake reprise.");
+        }
+        else
+        {
+            _adminSession.EnableVisualization(steamId);
+            _vizManager.RebuildMarkers(_spawns);
+            Server.ExecuteCommand("mp_pause_match");
+            Console.WriteLine($"[RetakeSpawnEditor] {player.PlayerName} active le Spawn Editor -- retake pausee.");
+            player.PrintToChat($"[SpawnEditor] Visualisation activee ({_spawns.Count} spawns) -- retake pausee.");
+        }
+    }
+
+    internal void AddSpawnForAdmin(CCSPlayerController player, string teamArg, string siteArg)
+    {
+        if (player.PlayerPawn?.Value?.AbsOrigin == null) return;
+        var team = teamArg == "CT" ? 3 : 2;
+        var site = siteArg == "B" ? 1 : 0;
+        var pos = player.PlayerPawn.Value.AbsOrigin;
+        var rot = player.PlayerPawn.Value.AbsRotation;
+
+        var spawn = new SpawnPoint
+        {
+            SpawnId = Guid.NewGuid(),
+            Team = team, BombSite = site,
+            IsInBombZone = false,
+            PositionX = pos.X, PositionY = pos.Y, PositionZ = pos.Z,
+            QAngleX = rot?.X ?? 0f, QAngleY = rot?.Y ?? 0f, QAngleZ = rot?.Z ?? 0f
+        };
+
+        _spawns.Add(spawn);
+        _adminSession.MarkUnsaved();
         UpdateSpawnCounts();
+        if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
+        player.PrintToChat($"[SpawnEditor] Spawn #{_spawns.Count - 1:D2} ajoute [{spawn.TeamLabel}][{spawn.SiteLabel}]. Sauvegarde: css_se_save");
+    }
+
+    internal void DeleteNearestForAdmin(CCSPlayerController player)
+    {
+        var nearest = _adminSession.GetNearestSpawn(player.SteamID);
+        if (nearest == null) { player.PrintToChat("[SpawnEditor] Aucun spawn proche."); return; }
+
+        _spawns.Remove(nearest);
+        _adminSession.SetNearestSpawn(player.SteamID, null);
+        _adminSession.MarkUnsaved();
+        UpdateSpawnCounts();
+        if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
+        player.PrintToChat($"[SpawnEditor] Spawn supprime. Total: {_spawns.Count}. Sauvegarde: css_se_save");
+    }
+
+    internal void SaveSpawnsForAdmin(CCSPlayerController player)
+    {
+        if (string.IsNullOrEmpty(_currentMap)) { player.PrintToChat("[SpawnEditor] Aucune carte chargee."); return; }
+        _fileManager.SaveSpawns(_currentMap, _spawns);
         _adminSession.MarkSaved();
-        if (_adminSession.IsVisualizationEnabled(player!.SteamID)) _vizManager.RebuildMarkers(_spawns);
+        player.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns sauvegardes -> {_currentMap}.json");
+    }
+
+    internal void ReloadSpawnsForAdmin(CCSPlayerController player)
+    {
+        if (string.IsNullOrEmpty(_currentMap)) { player.PrintToChat("[SpawnEditor] Aucune carte chargee."); return; }
+        _spawns = _fileManager.LoadSpawns(_currentMap);
+        _adminSession.MarkSaved();
+        UpdateSpawnCounts();
+        if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
         player.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns recharges depuis {_currentMap}.json");
     }
+
+    // -- Helpers --
 
     private bool IsAdmin(CCSPlayerController? player)
     {
@@ -265,12 +307,6 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         return true;
     }
 
-    private void UpdateSpawnCounts()
-    {
-        _countT = _spawns.Count(s => s.Team == 2);
-        _countCT = _spawns.Count(s => s.Team == 3);
-    }
-
     private void LoadCurrentMapSpawns()
     {
         _currentMap = Server.MapName;
@@ -278,6 +314,13 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         UpdateSpawnCounts();
     }
 
+    private void UpdateSpawnCounts()
+    {
+        _countT = _spawns.Count(s => s.Team == 2);
+        _countCT = _spawns.Count(s => s.Team == 3);
+    }
+
     private static CCSPlayerController? FindPlayerBySteamId(ulong steamId) =>
         Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && p.SteamID == steamId);
 }
+
