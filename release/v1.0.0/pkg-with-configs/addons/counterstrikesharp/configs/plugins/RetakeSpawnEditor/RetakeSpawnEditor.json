@@ -1,0 +1,8 @@
+{
+  "SpawnFolderPath": "../CS2Retake/spawns",
+  "AdminFlag": "@css/admin",
+  "BeamHeight": 72.0,
+  "MaxHighlightDistance": 150.0,
+  "MaxDisplayDistance": 2000.0,
+  "Version": 1
+}

@@ -2,3 +2,8 @@ bin/
 obj/
 *.user
 .vs/
+
+# Plugin packages — garder les ZIPs et configs, exclure les DLL/binaires
+plugin/pkg-with-configs/
+plugin/pkg-no-configs/
+plugin/config-base/
