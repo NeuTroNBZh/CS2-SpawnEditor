@@ -1,0 +1,12 @@
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\bin\Debug\net8.0\RetakeSpawnEditor.deps.json
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\bin\Debug\net8.0\RetakeSpawnEditor.dll
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\bin\Debug\net8.0\RetakeSpawnEditor.pdb
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\RetakeSpawnEditor.csproj.AssemblyReference.cache
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\RetakeSpawnEditor.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\RetakeSpawnEditor.AssemblyInfoInputs.cache
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\RetakeSpawnEditor.AssemblyInfo.cs
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\RetakeSpawnEditor.csproj.CoreCompileInputs.cache
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\RetakeSpawnEditor.dll
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\refint\RetakeSpawnEditor.dll
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\RetakeSpawnEditor.pdb
+C:\Users\alice\Documents\Mon-Code\plugincs2\spwanretake\RetakeSpawnEditor\obj\Debug\net8.0\ref\RetakeSpawnEditor.dll
