@@ -54,6 +54,9 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         AddCommand("css_se_save",    "Save spawns to JSON",                      CmdSave);
         AddCommand("css_se_reload",  "Reload spawns from JSON",                  CmdReload);
 
+        // Intercepte la commande noclip (bind H ou console) pour les admins sans sv_cheats
+        AddCommandListener("noclip", OnNoclipCommand, HookMode.Pre);
+
         if (hotReload) LoadCurrentMapSpawns();
         Console.WriteLine("[RetakeSpawnEditor] Loaded.");
     }
@@ -149,6 +152,13 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     {
         if (!IsAdmin(player)) return;
         ToggleVisualizationForAdmin(player!);
+    }
+
+    private HookResult OnNoclipCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        if (!IsAdmin(player)) return HookResult.Continue;
+        ToggleNoclipForAdmin(player!);
+        return HookResult.Stop; // Bloque la commande cheat, notre impl serveur prend le relais
     }
 
     private void CmdNoclip(CCSPlayerController? player, CommandInfo info)
@@ -391,3 +401,4 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private static CCSPlayerController? FindPlayerBySteamId(ulong steamId) =>
         Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && p.SteamID == steamId);
 }
+
