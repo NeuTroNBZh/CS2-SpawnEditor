@@ -25,6 +25,8 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private AdminSessionManager _adminSession = null!;
     private List<SpawnPoint> _spawns = new();
     private string _currentMap = string.Empty;
+    private int _countT;
+    private int _countCT;
 
     public void OnConfigParsed(SpawnEditorConfig config) => Config = config;
 
@@ -64,6 +66,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         _adminSession.Clear();
         _currentMap = mapName;
         _spawns = _fileManager.LoadSpawns(mapName);
+        UpdateSpawnCounts();
         Console.WriteLine($"[RetakeSpawnEditor] Map {mapName}: {_spawns.Count} spawns charges.");
     }
 
@@ -90,8 +93,8 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
                 _vizManager.UpdateHighlight(nearest);
             }
 
-            var totalT = _spawns.Count(s => s.Team == 2);
-            var totalCT = _spawns.Count(s => s.Team == 3);
+            var totalT = _countT;
+            var totalCT = _countCT;
             var line1 = $"[SpawnEditor ON] {_spawns.Count} spawns | T:{totalT} CT:{totalCT}";
 
             string line2;
@@ -152,6 +155,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         };
 
         _spawns.Add(spawn);
+        UpdateSpawnCounts();
         _adminSession.MarkUnsaved();
         if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
         player.PrintToChat($"[SpawnEditor] Spawn #{_spawns.Count - 1:D2} ajoute [{spawn.TeamLabel}][{spawn.SiteLabel}]. Sauvegarde: css_se_save");
@@ -164,6 +168,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         if (nearest == null) { player.PrintToChat("[SpawnEditor] Aucun spawn proche."); return; }
 
         _spawns.Remove(nearest);
+        UpdateSpawnCounts();
         _adminSession.SetNearestSpawn(player.SteamID, null);
         _adminSession.MarkUnsaved();
         if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
@@ -180,6 +185,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         var siteArg = info.GetArg(2).ToUpper();
         if (teamArg is "T" or "CT") nearest.Team = teamArg == "CT" ? 3 : 2;
         if (siteArg is "A" or "B") nearest.BombSite = siteArg == "B" ? 1 : 0;
+        UpdateSpawnCounts();
 
         _adminSession.MarkUnsaved();
         if (_adminSession.IsVisualizationEnabled(player.SteamID)) _vizManager.RebuildMarkers(_spawns);
@@ -199,6 +205,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private void CmdTeleport(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) return;
+        if (_spawns.Count == 0) { player!.PrintToChat("[SpawnEditor] Aucun spawn charge."); return; }
         if (!int.TryParse(info.GetArg(1), out var idx) || idx < 0 || idx >= _spawns.Count)
         {
             player!.PrintToChat($"[SpawnEditor] Usage: css_se_tp <0-{_spawns.Count - 1}>");
@@ -235,6 +242,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     {
         if (!IsAdmin(player)) return;
         _spawns = _fileManager.LoadSpawns(_currentMap);
+        UpdateSpawnCounts();
         _adminSession.MarkSaved();
         if (_adminSession.IsVisualizationEnabled(player!.SteamID)) _vizManager.RebuildMarkers(_spawns);
         player.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns recharges depuis {_currentMap}.json");
@@ -251,10 +259,17 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         return true;
     }
 
+    private void UpdateSpawnCounts()
+    {
+        _countT = _spawns.Count(s => s.Team == 2);
+        _countCT = _spawns.Count(s => s.Team == 3);
+    }
+
     private void LoadCurrentMapSpawns()
     {
         _currentMap = Server.MapName;
         _spawns = _fileManager.LoadSpawns(_currentMap);
+        UpdateSpawnCounts();
     }
 
     private static CCSPlayerController? FindPlayerBySteamId(ulong steamId) =>
