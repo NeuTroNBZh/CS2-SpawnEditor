@@ -16,7 +16,7 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
 {
     public override string ModuleName => "RetakeSpawnEditor";
     public override string ModuleVersion => "1.0.0";
-    public override string ModuleAuthor => "local";
+    public override string ModuleAuthor => "NeuTroNBZh";
 
     public SpawnEditorConfig Config { get; set; } = new();
 
