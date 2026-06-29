@@ -335,7 +335,9 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
         if (string.IsNullOrEmpty(_currentMap)) { player.PrintToChat("[SpawnEditor] Aucune carte chargee."); return; }
         _fileManager.SaveSpawns(_currentMap, _spawns);
         _adminSession.MarkSaved();
-        player.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns sauvegardes -> {_currentMap}.json");
+        // Recharge automatiquement CS2Retake sans restart de map
+        Server.ExecuteCommand("css_retakeread");
+        player.PrintToChat($"[SpawnEditor] {_spawns.Count} spawns sauvegardes et recharges par CS2Retake -- aucun restart necessaire.");
     }
 
     internal void ReloadSpawnsForAdmin(CCSPlayerController player)
@@ -401,4 +403,5 @@ public class SpawnEditorPlugin : BasePlugin, IPluginConfig<SpawnEditorConfig>
     private static CCSPlayerController? FindPlayerBySteamId(ulong steamId) =>
         Utilities.GetPlayers().FirstOrDefault(p => p.IsValid && p.SteamID == steamId);
 }
+
 
