@@ -136,22 +136,18 @@ If [CS2-SimpleAdmin](https://github.com/daffyyyy/CS2-SimpleAdmin) is installed, 
 
 ### Editing workflow
 
-```
-1. Type !admin → Spawn Editor → Toggle Visualization
-   (or: css_se in console)
-   → Match pauses automatically
-   → Colored pillars appear at every spawn
-
-2. Walk to the desired position
-
-3. Add spawn:      css_se_add T A      (Terrorist, Site A)
-   Delete nearest: css_se_del
-   Edit nearest:   css_se_set CT B     (change to CT, Site B)
-
-4. css_se_save     → writes to de_dust2.json (or current map)
-
-5. css_se          → disables visualization
-   → Match resumes automatically
+```mermaid
+flowchart TD
+    A["!admin → Spawn Editor → Toggle Visualization\n(or css_se in console)"] --> B["Match pauses automatically\nColored pillars appear at every spawn"]
+    B --> C[Walk to the desired position]
+    C --> D{"Action"}
+    D -->|Add| E["css_se_add T A\n(Terrorist, Site A)"]
+    D -->|Delete| F[css_se_del nearest]
+    D -->|Edit| G["css_se_set CT B\n(change to CT, Site B)"]
+    E --> H["css_se_save\nwrites to de_dust2.json (or current map)"]
+    F --> H
+    G --> H
+    H --> I["css_se\ndisables visualization, match resumes automatically"]
 ```
 
 ### Spawn file format
