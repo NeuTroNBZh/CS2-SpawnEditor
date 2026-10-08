@@ -1,3 +1,7 @@
+> [!WARNING]
+> **Deprecated: the spawn editor is now built into [CS2-RetakeV4](https://github.com/NeuTroNBZh/CS2-RetakeV4)** (`!retake edit`).
+> This companion plugin is only for servers still running the legacy [CS2-RETAKE (V3)](https://github.com/NeuTroNBZh/CS2-RETAKE). Do not run it next to RetakeV4.
+
 <div align="center">
 
 # RetakeSpawnEditor
